@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: learn-syriac-tutor
+    env: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node server.js
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
