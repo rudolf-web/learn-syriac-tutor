@@ -1,6 +1,7 @@
 // Tutor AI server for Learn Syriac (AramSyriac) — standalone, free-tier friendly.
-// Runs on Render's free web service. The Gemini API key is read ONLY from the
-// GEMINI_API_KEY environment variable — never put the key in this file or in git.
+// Runs on Render's free web service and on Vercel (serverless, Hobby plan).
+// The Gemini API key is read ONLY from the GEMINI_API_KEY environment
+// variable — never put the key in this file or in git.
 const express = require("express");
 const cors = require("cors");
 const { GoogleGenAI } = require("@google/genai");
@@ -120,6 +121,12 @@ app.post("/api/tutor", async (req, res) => {
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Learn Syriac Tutor AI berjalan di http://0.0.0.0:${PORT}`);
-});
+// Only listen when run directly (node server.js). On Vercel the app is
+// imported by api/index.js instead, so it must not listen there.
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Learn Syriac Tutor AI berjalan di http://0.0.0.0:${PORT}`);
+  });
+}
+
+module.exports = app;
