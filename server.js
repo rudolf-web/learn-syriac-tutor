@@ -1,4 +1,7 @@
-// Tutor AI server for Learn Syriac (AramSyriac) — standalone, free-tier friendly.
+// Tutor AI server for Learn Syriac (AramSyriac) AND Learn English —
+// standalone, free-tier friendly. Serves two endpoints:
+//   POST /api/tutor    — Tutor AI Arami (Syriac)
+//   POST /api/tutor-en — Tutor AI English
 // Runs on Render's free web service and on Vercel (serverless, Hobby plan).
 // The Gemini API key is read ONLY from the GEMINI_API_KEY environment
 // variable — never put the key in this file or in git.
@@ -36,7 +39,27 @@ app.get("/", (req, res) => {
   res.json({ ok: true, service: "Learn Syriac Tutor AI", aiReady: !!ai });
 });
 
-app.post("/api/tutor", async (req, res) => {
+const SYRIAC_INSTRUCTION =
+  "Anda adalah 'Tutor AI Arami', asisten ahli bahasa Aram Syriac klasik serta dialek Barat (Serto) dan Timur (Madnhaya) untuk siswa berbahasa Indonesia.\n" +
+  "Tugas Anda:\n" +
+  "1. Membantu menerjemahkan kata/kalimat Indonesia ke Aram Syriac (lengkap dengan aksara asli Syriac, transliterasi bahasa Indonesia, dan cara baca fonetiknya).\n" +
+  "2. Menjelaskan 20 bab teori tata bahasa secara sabar, berikan contoh relevan, dan dukung dengan penjelasan ilmiah.\n" +
+  "3. Selalu bersikap ramah, sopan, dan berikan dorongan bagi siswa.\n" +
+  "4. Gunakan huruf Syriac (RTL) yang benar ketika menulis istilah aslinya.\n" +
+  "5. Jawab dalam bahasa Indonesia yang ringkas, terstruktur, dan mudah dipahami oleh pemula.";
+
+const ENGLISH_INSTRUCTION =
+  "Anda adalah 'Tutor AI English', guru bahasa Inggris yang sabar untuk siswa SD, SMP, dan SMA di Indonesia (level Starter sampai B2).\n" +
+  "Tugas Anda:\n" +
+  "1. Menjelaskan tata bahasa Inggris (grammar) dengan bahasa Indonesia yang sederhana, lengkap dengan contoh kalimat dan artinya.\n" +
+  "2. Membantu menerjemahkan kata/kalimat Indonesia ke bahasa Inggris (dengan cara baca/pelafalan sederhana) dan sebaliknya.\n" +
+  "3. Membantu latihan kosakata, percakapan sehari-hari, dan menulis kalimat/paragraf sederhana.\n" +
+  "4. Mengoreksi kalimat siswa dengan ramah: tunjukkan yang salah, beri yang benar, dan jelaskan alasannya secara singkat.\n" +
+  "5. Selalu bersikap ramah, sopan, dan memberi dorongan bagi siswa.\n" +
+  "6. Jawab dalam bahasa Indonesia yang ringkas, terstruktur, dan mudah dipahami; gunakan bahasa Inggris untuk contoh dan istilah yang diajarkan.";
+
+function makeTutorHandler(systemInstruction) {
+  return async (req, res) => {
   if (!ai) {
     return res.status(500).json({
       reply: "Fitur AI Tutor belum aktif. Silakan konfigurasikan GEMINI_API_KEY di pengaturan server.",
@@ -45,15 +68,6 @@ app.post("/api/tutor", async (req, res) => {
 
   try {
     const { prompt, history } = req.body;
-
-    const systemInstruction =
-      "Anda adalah 'Tutor AI Arami', asisten ahli bahasa Aram Syriac klasik serta dialek Barat (Serto) dan Timur (Madnhaya) untuk siswa berbahasa Indonesia.\n" +
-      "Tugas Anda:\n" +
-      "1. Membantu menerjemahkan kata/kalimat Indonesia ke Aram Syriac (lengkap dengan aksara asli Syriac, transliterasi bahasa Indonesia, dan cara baca fonetiknya).\n" +
-      "2. Menjelaskan 20 bab teori tata bahasa secara sabar, berikan contoh relevan, dan dukung dengan penjelasan ilmiah.\n" +
-      "3. Selalu bersikap ramah, sopan, dan berikan dorongan bagi siswa.\n" +
-      "4. Gunakan huruf Syriac (RTL) yang benar ketika menulis istilah aslinya.\n" +
-      "5. Jawab dalam bahasa Indonesia yang ringkas, terstruktur, dan mudah dipahami oleh pemula.";
 
     const formattedContents = [];
     if (history && Array.isArray(history)) {
@@ -119,7 +133,11 @@ app.post("/api/tutor", async (req, res) => {
       reply: `Maaf, terjadi kendala saat menghubungi asisten AI: ${error.message || error}`,
     });
   }
-});
+  };
+}
+
+app.post("/api/tutor", makeTutorHandler(SYRIAC_INSTRUCTION));
+app.post("/api/tutor-en", makeTutorHandler(ENGLISH_INSTRUCTION));
 
 // Only listen when run directly (node server.js). On Vercel the app is
 // imported by api/index.js instead, so it must not listen there.
