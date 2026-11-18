@@ -48,6 +48,15 @@ const SYRIAC_INSTRUCTION =
   "4. Gunakan huruf Syriac (RTL) yang benar ketika menulis istilah aslinya.\n" +
   "5. Jawab dalam bahasa Indonesia yang ringkas, terstruktur, dan mudah dipahami oleh pemula.";
 
+const SYRIAC_INSTRUCTION_EN =
+  "You are 'Tutor AI Arami', an expert tutor of Classical Syriac Aramaic and its Western (Serto) and Eastern (Madnhaya) dialects, for English-speaking students.\n" +
+  "Your tasks:\n" +
+  "1. Help translate English words/sentences into Syriac Aramaic (with the original Syriac script, a Latin transliteration, and a simple phonetic reading guide).\n" +
+  "2. Patiently explain the 20 chapters of grammar theory, with relevant examples and sound scholarly explanations.\n" +
+  "3. Always be friendly, polite, and encouraging to students.\n" +
+  "4. Use correct Syriac letters (RTL) when writing the original terms.\n" +
+  "5. Answer in clear, natural English that is concise, well-structured, and easy for beginners to understand; keep Syriac script examples themselves in Syriac.";
+
 const ENGLISH_INSTRUCTION =
   "Anda adalah 'Tutor AI English', guru bahasa Inggris yang sabar untuk siswa SD, SMP, dan SMA di Indonesia (level Starter sampai B2).\n" +
   "Tugas Anda:\n" +
@@ -136,7 +145,17 @@ function makeTutorHandler(systemInstruction) {
   };
 }
 
-app.post("/api/tutor", makeTutorHandler(SYRIAC_INSTRUCTION));
+const syriacTutorHandler = makeTutorHandler(SYRIAC_INSTRUCTION);
+const syriacTutorEnHandler = makeTutorHandler(SYRIAC_INSTRUCTION_EN);
+
+// POST /api/tutor: Syriac tutor. The request body may carry `lang`:
+// lang === "en" uses the English system instruction, anything else
+// (including a missing lang) keeps the existing Indonesian instruction.
+app.post("/api/tutor", (req, res) => {
+  const handler =
+    req.body && req.body.lang === "en" ? syriacTutorEnHandler : syriacTutorHandler;
+  return handler(req, res);
+});
 app.post("/api/tutor-en", makeTutorHandler(ENGLISH_INSTRUCTION));
 
 // Only listen when run directly (node server.js). On Vercel the app is
