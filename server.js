@@ -158,6 +158,87 @@ app.post("/api/tutor", (req, res) => {
 });
 app.post("/api/tutor-en", makeTutorHandler(ENGLISH_INSTRUCTION));
 
+// ---- SIAGA MIMI: AI journal generator ----
+// POST /api/siaga — generates a Teaching Journal entry (Kurikulum Merdeka,
+// Deep Learning) in English and returns it as structured JSON, so the
+// SIAGA MIMI web app can fill its journal form without manual typing.
+// Uses the same free Gemini key as the tutor endpoints.
+const SIAGA_INSTRUCTION =
+  "You are an expert Indonesian elementary school (SD) teacher writing a Teaching Journal (Jurnal Mengajar) in English, following Kurikulum Merdeka and Deep Learning (Pembelajaran Mendalam).\n" +
+  "Given a subject, grade/class, topic, date and time period, write a complete journal entry for one lesson.\n" +
+  "Return ONLY a JSON object, no markdown fences and no extra text, with exactly these keys:\n" +
+  "{\n" +
+  "  \"objectives\": \"2-3 learning objectives, each starting with 'Students are able to', separated by new lines\",\n" +
+  "  \"modelMethod\": \"Model: ... Method: ... (one or two short lines)\",\n" +
+  "  \"learningProcess\": \"Opening Activities (10 min): ... Main Activities (50 min): ... Closing Activities (10 min): ...\",\n" +
+  "  \"assignment\": \"Homework or assignment for the students\",\n" +
+  "  \"remark\": \"One short practical teaching note or reminder\"\n" +
+  "}\n" +
+  "Write everything in clear, simple English suitable for a Grade 6 teacher's journal. Keep each field focused and practical; do not invent student names, scores, or attendance numbers.";
+
+function parseSiagaJSON(text) {
+  if (!text) return null;
+  let t = String(text).trim();
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = t.indexOf("{");
+  const end = t.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try { return JSON.parse(t.slice(start, end + 1)); } catch (e) { return null; }
+}
+
+app.post("/api/siaga", async (req, res) => {
+  if (!ai) {
+    return res.status(500).json({ ok: false, error: "Fitur AI belum aktif. Silakan konfigurasikan GEMINI_API_KEY di pengaturan server." });
+  }
+  const b = req.body || {};
+  if (b.task !== "journal" || !b.subject) {
+    return res.status(400).json({ ok: false, error: "Permintaan tidak lengkap: task harus 'journal' dan subject wajib diisi." });
+  }
+  const prompt =
+    "Subject: " + b.subject + "\n" +
+    "Class/Grade: " + (b.kelas || "-") + "\n" +
+    "Topic: " + (b.topic || b.subject) + "\n" +
+    "Date: " + (b.tanggal || "-") + "\n" +
+    "Time period: " + (b.waktu || "-") + "\n" +
+    "Write the journal entry as JSON.";
+  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let replyText = "";
+  let lastError = null;
+  for (const modelName of modelsToTry) {
+    let attempts = 0;
+    while (attempts < 2) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: { systemInstruction: SIAGA_INSTRUCTION, temperature: 0.7 },
+        });
+        if (response && response.text) { replyText = response.text; break; }
+      } catch (err) {
+        attempts++;
+        lastError = err;
+        const errMsg = err.message || "";
+        const isTransient =
+          errMsg.includes("503") ||
+          errMsg.includes("500") ||
+          errMsg.includes("RESOURCE_EXHAUSTED") ||
+          errMsg.includes("limit") ||
+          (err.status && (err.status === 503 || err.status === 429));
+        if (isTransient && attempts < 2) { await delay(1000); continue; }
+        break;
+      }
+    }
+    if (replyText) break;
+  }
+  if (!replyText) {
+    return res.status(500).json({ ok: false, error: "Asisten AI tidak dapat merespons saat ini: " + (lastError && lastError.message ? lastError.message : "coba lagi sebentar lagi.") });
+  }
+  const data = parseSiagaJSON(replyText);
+  if (!data) return res.json({ ok: false, error: "AI menjawab di luar format JSON.", raw: replyText });
+  res.json({ ok: true, data });
+});
+
 // Only listen when run directly (node server.js). On Vercel the app is
 // imported by api/index.js instead, so it must not listen there.
 if (require.main === module) {
