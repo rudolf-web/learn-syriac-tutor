@@ -239,6 +239,80 @@ app.post("/api/siaga", async (req, res) => {
   res.json({ ok: true, data });
 });
 
+// ---- CERIWIS: voice chat AI proxy (NVIDIA) ----
+// POST /api/ceriwis — lets the Ceriwis voice-chat app talk to NVIDIA
+// without every visitor needing their own API key. The key lives ONLY
+// in the NVIDIA_API_KEY environment variable on the server — never in
+// this file, never in the client. Body: { messages: [{role, content}...],
+// model? } — model defaults to meta/llama-3.1-8b-instruct.
+// Returns { ok: true, reply: "..." } or { ok: false, error: "..." }.
+const CERIWIS_INSTRUCTION =
+  "Kamu Ceriwis, teman ngobrol AI yang ceria, ramah, dan banyak omong (ceriwis). " +
+  "Bicara dalam bahasa Indonesia yang santai dan hangat, seperti ngobrol dengan teman. " +
+  "Jawabanmu singkat saja untuk suara: 1-3 kalimat, karena jawabanmu akan dibacakan. " +
+  "Boleh bercanda ringan. Kalau tidak tahu, katakan terus terang. " +
+  "Jangan pernah menulis jawaban yang sangat panjang.";
+
+const CERIWIS_DEFAULT_MODEL = "meta/llama-3.1-8b-instruct";
+
+app.post("/api/ceriwis", async (req, res) => {
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  if (!nvidiaKey) {
+    return res.status(500).json({
+      ok: false,
+      error: "Key NVIDIA belum diatur di server. Tambahkan NVIDIA_API_KEY di Environment Variables pada pengaturan project Vercel, lalu redeploy.",
+    });
+  }
+  const b = req.body || {};
+  const messages = Array.isArray(b.messages) ? b.messages : [];
+  const userMessages = messages
+    .filter((m) => m && typeof m.content === "string" && (m.role === "user" || m.role === "assistant"))
+    .slice(-10)
+    .map((m) => ({ role: m.role, content: m.content }));
+  if (!userMessages.length || userMessages[userMessages.length - 1].role !== "user") {
+    return res.status(400).json({ ok: false, error: "Permintaan tidak lengkap: kirim messages dengan pesan user terakhir." });
+  }
+  const model = typeof b.model === "string" && b.model.trim() ? b.model.trim() : CERIWIS_DEFAULT_MODEL;
+  try {
+    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + nvidiaKey,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: CERIWIS_INSTRUCTION }, ...userMessages],
+        temperature: 0.8,
+        max_tokens: 300,
+      }),
+    });
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const errJson = await response.json();
+        detail = (errJson && errJson.message) || (errJson && errJson.error && errJson.error.message) || "";
+      } catch (e) { /* bukan JSON, abaikan */ }
+      return res.status(502).json({
+        ok: false,
+        error: "NVIDIA menjawab dengan error (HTTP " + response.status + ")" + (detail ? ": " + detail : ". Coba lagi sebentar lagi."),
+      });
+    }
+    const data = await response.json();
+    const reply =
+      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content
+        ? String(data.choices[0].message.content).trim()
+        : "";
+    if (!reply) {
+      return res.status(502).json({ ok: false, error: "NVIDIA tidak mengembalikan jawaban. Coba lagi sebentar lagi." });
+    }
+    res.json({ ok: true, reply });
+  } catch (error) {
+    console.error("Kesalahan API Ceriwis:", error);
+    res.status(502).json({ ok: false, error: "Tidak dapat menghubungi NVIDIA: " + (error.message || error) });
+  }
+});
+
 // Only listen when run directly (node server.js). On Vercel the app is
 // imported by api/index.js instead, so it must not listen there.
 if (require.main === module) {
