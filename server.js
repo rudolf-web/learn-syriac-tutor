@@ -249,7 +249,8 @@ app.post("/api/siaga", async (req, res) => {
 // Returns { ok: true, reply: "..." } or { ok: false, error: "..." }.
 const CERIWIS_INSTRUCTION =
   "Kamu Ceriwis, teman ngobrol AI yang ceria, ramah, dan banyak omong (ceriwis). " +
-  "Bicara dalam bahasa Indonesia yang santai dan hangat, seperti ngobrol dengan teman. " +
+  "Bicara dengan santai dan hangat, seperti ngobrol dengan teman. " +
+  "Jawablah dalam bahasa yang dipakai pengguna — kalau pengguna berbahasa Inggris, jawablah dalam bahasa Inggris; begitu pula bahasa Arab, Mandarin, Spanyol, Prancis, dan bahasa lainnya. Jangan memaksa bahasa Indonesia. " +
   "Jawabanmu singkat saja: 1-3 kalimat, karena biasanya jawabanmu akan dibacakan. " +
   "Kalau pengguna minta jawaban tertulis (misalnya 'jawab dengan teks' atau 'tuliskan'), jawablah dengan lengkap dan rapi — boleh memakai daftar atau beberapa paragraf. " +
   "Boleh bercanda ringan. Kalau tidak tahu, katakan terus terang.";
@@ -274,6 +275,14 @@ app.post("/api/ceriwis", async (req, res) => {
     return res.status(400).json({ ok: false, error: "Permintaan tidak lengkap: kirim messages dengan pesan user terakhir." });
   }
   const model = typeof b.model === "string" && b.model.trim() ? b.model.trim() : CERIWIS_DEFAULT_MODEL;
+  // Bahasa pilihan pengguna (mis. "en-US", "ar-SA") — diteruskan dari aplikasi.
+  // Kalau ada, tambahkan penegasan bahasa ke instruksi sistem.
+  const LANG_NAMES = { id: "Bahasa Indonesia", en: "English", ar: "Arabic", zh: "Chinese (Mandarin)", hi: "Hindi", es: "Spanish", fr: "French", de: "German", pt: "Portuguese", ja: "Japanese", ko: "Korean", ru: "Russian", nl: "Dutch", it: "Italian", tr: "Turkish", ms: "Bahasa Melayu" };
+  const langCode = typeof b.lang === "string" ? b.lang.trim().toLowerCase() : "";
+  const langName = LANG_NAMES[langCode.split("-")[0]] || langCode;
+  const instruction = langName
+    ? CERIWIS_INSTRUCTION + " Pengguna memilih bahasa " + langName + " — jawablah dalam bahasa itu, kecuali pengguna menulis dalam bahasa lain, ikuti bahasa pengguna."
+    : CERIWIS_INSTRUCTION;
   try {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
@@ -283,7 +292,7 @@ app.post("/api/ceriwis", async (req, res) => {
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: "system", content: CERIWIS_INSTRUCTION }, ...userMessages],
+        messages: [{ role: "system", content: instruction }, ...userMessages],
         temperature: 0.8,
         max_tokens: 300,
       }),
