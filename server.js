@@ -244,7 +244,8 @@ app.post("/api/siaga", async (req, res) => {
 // without every visitor needing their own API key. The key lives ONLY
 // in the NVIDIA_API_KEY environment variable on the server — never in
 // this file, never in the client. Body: { messages: [{role, content}...],
-// model? } — model defaults to meta/llama-3.1-8b-instruct.
+// model? } — model defaults to nvidia/nemotron-3.5-bolt-e4b
+// (the old meta/llama-3.1-8b-instruct was retired by NVIDIA's hosted API — 410).
 // Returns { ok: true, reply: "..." } or { ok: false, error: "..." }.
 const CERIWIS_INSTRUCTION =
   "Kamu Ceriwis, teman ngobrol AI yang ceria, ramah, dan banyak omong (ceriwis). " +
@@ -253,7 +254,7 @@ const CERIWIS_INSTRUCTION =
   "Boleh bercanda ringan. Kalau tidak tahu, katakan terus terang. " +
   "Jangan pernah menulis jawaban yang sangat panjang.";
 
-const CERIWIS_DEFAULT_MODEL = "meta/llama-3.1-8b-instruct";
+const CERIWIS_DEFAULT_MODEL = "nvidia/nemotron-3.5-bolt-e4b";
 
 app.post("/api/ceriwis", async (req, res) => {
   const nvidiaKey = process.env.NVIDIA_API_KEY;
